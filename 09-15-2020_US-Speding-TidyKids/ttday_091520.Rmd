@@ -125,7 +125,7 @@ kids %>%
 ```
 
 Key takeaways:
-1. DC has some of the highest spending on public health which seems to have been cut down since 2009. Vermont has an increased spending in public health, whereas most other states don't see much of a growth.
+DC has some of the highest spending on public health which seems to have been cut down since 2009. Vermont has an increased spending in public health, whereas most other states don't see much of a growth.
 
 
 I would like to improve this visualization using the top public health spenders (as opposed to the current random sample in the visualization) as well as look at the proportion of total spending that states spend on public health infrastructure. When I have time again!

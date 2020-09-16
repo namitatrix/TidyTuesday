@@ -64,13 +64,6 @@ ggplot() +
   labs(title = "Overall spending per child from 2000-2016 in United States", x = "Department", y = "Inflation adjusted spending per child(in $1000s)")
 ```
 
-```{r}
-# Which state spends the most on which sector?
-kids %>% 
-  group_by(state) %>% 
-  
-```
-
 Trends in public health spending across states and which state has spent the most in public health
 ```{r}
 # which state has spent the most $ / child in pubic health?
@@ -97,7 +90,7 @@ ggplot(aes(x = year, y = inf_adj_perchild, color = state)) +
 ```
 
 
-Working on while watching Robinson live cast:
+Change in public health spending over time using some newly learned tidy features (from Dan Robinson's screen cast):  
 ```{r}
 # General trends in public health spending 
 kids %>% 
@@ -133,4 +126,7 @@ kids %>%
 
 Key takeaways:
 1. DC has some of the highest spending on public health which seems to have been cut down since 2009. Vermont has an increased spending in public health, whereas most other states don't see much of a growth.
+
+
+I would like to improve this visualization using the top public health spenders (as opposed to the current random sample in the visualization) as well as look at the proportion of total spending that states spend on public health infrastructure. When I have time again!
 

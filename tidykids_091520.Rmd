@@ -1,0 +1,137 @@
+---
+title: "Tidy Tuesday : Government Spending on Kids"
+author: "Namita Trikannad"
+date: "9/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set default knitr chunks
+knitr::opts_chunk$set(
+  tidy.opts=list(width.cutoff=60),tidy=TRUE,
+  echo = FALSE,  # don't print the code chunk
+  results = 'hide',
+  warning = FALSE,  # don't print warnings
+  message = FALSE,  # don't print messages
+  fig.width = 8,  # set default width of figures
+  fig.height = 6,  # set default height of figures
+  fig.align = "center",  # always align figure in center
+  fig.pos = "H",  # always plot figure at the exact location of the code chunk
+  cache = F)  # don't cache results  #CHANGE THIS TO "FALSE" AFTER YOU'RE DONE !!
+
+#Remove this 
+setwd("GitHub/TidyTuesday")
+```
+
+```{r libraries}
+library(tidytuesdayR)
+library(viridis)
+library(ggthemes)
+```
+
+```{r read}
+dat <- tidytuesdayR::tt_load('2020-09-15')
+kids <- dat$kids
+typeof(kids)
+str(kids)
+dim(kids)
+# Are there any missing values?
+colSums(is.na(kids))
+
+# Where are the missing values?
+kids[!complete.cases(kids),] %>% 
+  dplyr::count(variable, year) 
+
+# Data is missing for all states for year 1997, Medicaid CHIP and other health variables. These are removed in further analysis. The data for 2000 and above years are retained for relevancy. 
+
+kids <- kids %>% 
+  drop_na() %>% 
+  filter(year != "1997")
+
+# How complete is the data?
+# Do all states have all the variables, and all the years of data? 
+
+kids %>% 
+  count(state, variable) %>% 
+  arrange(n) 
+
+# Each state has one observation per variable per year. Each state x variable has 20 observaitions except for the variables Medicaid_CHIP and other_health as their 1997 data was NA and removed. 
+
+colSums(is.na(kids)) # No more missing data 
+```
+
+Where do overall states spend the most per child?
+```{r}
+kids %>% 
+  group_by(variable) %>% 
+  summarize(total = sum(inf_adj_perchild)) %>% 
+  mutate(variable = fct_reorder(variable, total, .desc = F)) %>% 
+  ggplot(aes(x = variable, y = total)) +
+  geom_col() + 
+  theme_classic() + 
+  theme(plot.title = element_text(face = "bold", hjust = 0.5),
+        axis.text.x = element_text(color = "black", angle = 90)) +
+  labs(x = "Spending Sector", 
+       y = "Total Adjusted Spending / Child") +
+  scale_y_continuous(labels = scales::dollar) +
+  coord_flip()
+
+```
+
+Let's focus on the health related spending of the states for the top states that spend heavily on health related spending:
+```{r}
+kids %>% 
+  filter(state %in% c("District of Columbia", "New York", "Wyoming", "Massachusetts", "Vermont", "New Mexico", "Mississippi", "California", "Maine", "Oregon"),
+         variable %in% c("other_health", "Medicaid_CHIP", "pubhealth")) %>%
+  group_by(state, year) %>% 
+  summarize(total = sum(inf_adj_perchild)) %>%
+  mutate(change = total / dplyr::first(total) - 1) %>%
+  ungroup() %>% 
+  mutate(state = fct_reorder(state, change)) %>% 
+  ggplot(aes(x = year, y = change)) +
+  geom_line() +
+  facet_wrap(~state, ncol = 5) + 
+  scale_y_continuous(labels = scales::percent) +
+  theme_classic() 
+```
+
+Change in public health spending over time using some newly learned tidy features (from Dan Robinson's screen cast):  
+```{r}
+# General trends in public health spending 
+kids %>% 
+  filter(variable == "pubhealth", 
+         state %in% sample(unique(state),51)) %>% 
+  mutate(state = fct_reorder(state, inf_adj_perchild, max, .desc = TRUE)) %>% 
+  ggplot(aes(year, inf_adj_perchild)) +
+  geom_line() +
+  expand_limits(y = 0) + #Sets the y-axis scale to start from 0
+  facet_wrap(~state) +
+  theme_tufte() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  labs(title = "Statewise spending per child on public health", y = "Inflation adjusted spending per child in $1000s", x = "Year") +
+  scale_y_continuous(labels = scales::dollar) # Adds symbols to axis labels 
+
+# Change in public health spending over the years 
+kids %>% 
+  filter(variable == "pubhealth",
+         state %in% sample(unique(state),51))  %>% 
+  mutate(change = inf_adj_perchild / first(inf_adj_perchild) - 1) %>% 
+  mutate(state = fct_reorder(state, change, max, .desc = TRUE)) %>% 
+   ggplot(aes(year, inf_adj_perchild)) +
+  geom_line() +
+  expand_limits(y = 0) + #Sets the y-axis scale to start from 0
+  facet_wrap(~state) +
+  theme_tufte() +
+  theme(axis.text.x = element_text(angle = 90), plot.title = element_text(hjust = 0.5, face = "bold")) +
+  labs(title = "Statewise spending per child on public health", y = "Change in inflation adjusted spending per child in $1000s", x = "Year") + 
+  scale_y_continuous(labels = scales::percent, breaks = c(0,2,4,6))
+  
+  
+```
+
+Key takeaways:
+DC has some of the highest spending on public health which seems to have been cut down since 2009. Vermont has an increased spending in public health, whereas most other states don't see much of a growth.
+
+
+I would like to improve this visualization using the top public health spenders (as opposed to the current random sample in the visualization) as well as look at the proportion of total spending that states spend on public health infrastructure. When I have time again!
+

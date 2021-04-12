@@ -1,0 +1,139 @@
+---
+title: "deforestation_04072021"
+author: "Namita Trikannad"
+date: "4/7/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set default knitr chunks
+knitr::opts_chunk$set(
+  tidy.opts=list(width.cutoff=60),tidy=TRUE,
+  echo = FALSE,  # don't print the code chunk
+  results = 'hide',
+  warning = FALSE,  # don't print warnings
+  message = FALSE,  # don't print messages
+  fig.width = 8,  # set default width of figures
+  fig.height = 6,  # set default height of figures
+  fig.align = "center",  # always align figure in center
+  fig.pos = "H",  # always plot figure at the exact location of the code chunk
+  cache = F)  # don't cache results  #CHANGE THIS TO "FALSE" AFTER YOU'RE DONE !!
+
+#Remove this 
+setwd("GitHub/TidyTuesday")
+```
+
+
+```{r}
+library(tidyverse)
+library(tidytuesdayR)
+theme_set(theme_minimal())
+library(tidytext)
+library(maps)
+library(fuzzyjoin)
+library(ggthemes)
+library(ggpubr)
+```
+
+```{r}
+tt <- tt_load("2021-04-06")
+```
+
+```{r}
+forest <- tt$forest
+forest_area <- tt$forest_area
+brazil_loss <- tt$brazil_loss
+
+#soybean_use <- tt$soybean_use 
+#veg_oil <- tt$vegetable_oil
+
+
+# Which countries have gained/lost most forests 
+p1 <- forest %>% 
+  filter(year == 2015) %>%
+  filter(str_length(code) <= 3) %>% 
+  rename(country = entity) %>% 
+  # group_by(year) %>% 
+  slice_max(abs(net_forest_conversion), n = 20) %>% #getting top 20 forest gainers/losers each year 
+  mutate(country = fct_reorder(country, net_forest_conversion)) %>%
+  ggplot(aes(net_forest_conversion, country, fill = net_forest_conversion > 0)) +
+  geom_col() +
+  scale_fill_grey(start = 0.7, end = 0.3) +
+  # facet_wrap(~year, scales = "free_y") +
+  theme(legend.position = "none",
+        title = element_text(face = "bold", hjust = 0.5, size = 8)) +
+  labs(title = "5yr Forest Coversion (2015)",
+       x = "Net forest conversion (Hectares)", 
+       y = "Country")
+
+
+# Let's make a time map of forest cover 
+# Some EDA before that 
+
+# There is just one entry for every country every year
+forest_area %>% group_by(code) %>% count(year, sort = T) 
+
+forest_area %>% group_by(year) %>% count() 
+
+# Cleaning
+forest_area <- forest_area %>% 
+  filter(!is.na(code)) %>% 
+  filter(str_length(code) <= 3) %>%
+  rename(country = entity) %>% 
+  filter(year == 2015) 
+
+# Map the forest area change
+map_joined_data <- forest_area %>%
+  inner_join(maps::iso3166, by = c(code = "a3"))
+
+p2 <- map_data("world") %>%
+  as_tibble() %>% 
+  filter(region != "Antarctica") %>% 
+  #filter(region == "Brazil") %>%
+  regex_left_join(map_joined_data, by=c(region="mapname")) %>% 
+  ggplot(aes(long, lat, group = group, fill = forest_area)) + 
+  geom_polygon(color = "black", size = 0.05) +
+  scale_fill_gradient2(name = "Share", 
+                       low = "goldenrod4", high = "darkgreen") +
+  labs(title = "Global percentage of forest cover (2015)") +
+  theme(title = element_text(face = "bold", hjust = 0.5, size = 8)) 
+  
+  
+#animate(plot = p1, renderer = gifski_renderer())
+
+```
+
+Main reason for deforestation in Brazil 
+```{r}
+head(brazil_loss)
+
+# Reason by total loss
+
+p3 <- brazil_loss %>% 
+  pivot_longer(commercial_crops:small_scale_clearing) %>% 
+  mutate(name = str_to_sentence(str_replace_all(name, "_"," "))) %>% 
+  group_by(name) %>% 
+  summarize(total_loss = sum(value))  %>% 
+  mutate(name = fct_reorder(name, total_loss)) %>% 
+  slice_max(total_loss, n = 5) %>% 
+  ggplot(aes(total_loss, name, fill = name)) +
+  geom_col()+
+  labs(title = "Top 5 causes of deforestation in Brazil",
+       x = "Total loss (hectares)", y ="" ) +
+  theme(title = element_text(face = "bold", hjust = 0.5, size = 8),
+        legend.position = "none")+
+  scale_fill_grey(name = "Reasons", start = 0.8, end = 0.2) 
+  
+```
+
+
+```{r}
+library(gridExtra)
+grid.arrange(p2,
+             p1,p3,
+             ncol = 2, nrow = 2, 
+             layout_matrix = rbind(c(1,1), c(2,3)))
+
+```
+
+

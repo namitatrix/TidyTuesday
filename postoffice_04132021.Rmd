@@ -1,0 +1,266 @@
+---
+title: "postoffice_04132021"
+author: "Namita Trikannad"
+date: "4/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set default knitr chunks
+knitr::opts_chunk$set(
+  tidy.opts=list(width.cutoff=60),tidy=TRUE,
+  echo = FALSE,  # don't print the code chunk
+  results = 'hide',
+  warning = FALSE,  # don't print warnings
+  message = FALSE,  # don't print messages
+  fig.width = 8,  # set default width of figures
+  fig.height = 6,  # set default height of figures
+  fig.align = "center",  # always align figure in center
+  fig.pos = "H",  # always plot figure at the exact location of the code chunk
+  cache = F)  # don't cache results  #CHANGE THIS TO "FALSE" AFTER YOU'RE DONE !!
+
+#Remove this 
+setwd("GitHub/TidyTuesday")
+```
+
+
+```{r}
+library(tidyverse)
+library(tidytuesdayR)
+theme_set(theme_minimal())
+library(tidytext)
+library(maps)
+library(fuzzyjoin)
+library(ggthemes)
+library(ggpubr)
+library(scales)
+theme_set(theme_minimal())
+```
+
+```{r}
+tt <- tt_load("2021-04-13")
+po <- tt$post_offices
+
+# what is the grain of the data
+
+po %>% 
+  count(name, orig_name, state, county1, sort = T) 
+# check individual entry to figure out why same entry is duplicated 
+po %>% 
+  filter(name == "DORSEY", county1 == "COLFAX") 
+# it is due to the est and discont dates, same post office has multiple est. and discont. dates as they may have been relocated/modified during those times 
+
+# Let's use add_count 
+
+po %>% 
+  add_count(name, orig_name, state, county1, sort =T) %>% 
+  filter(n >= 2) %>%
+  arrange(name, orig_name, state, county1) %>% head(30) %>% View()
+  
+
+# Cleaning
+
+po <- po %>% 
+  select(name, state, county1, county2, county3, established, discontinued, stamp_index, continuous, id, coordinates, latitude, longitude, gnis_county, gnis_state) %>% 
+  filter(str_length(state) == 2) %>%
+  filter(is.na(discontinued) | established <= discontinued) %>% 
+  replace_na(list(discontinued = 2001)) %>%
+  filter(established >= 1639, 
+         discontinued <= 2021) 
+  
+po_years <- po %>% 
+  mutate(year = map2(established, discontinued, seq)) %>% 
+  unnest(year) 
+
+# making a plot of number of post offices active each year 
+po_years %>% 
+  count(year, 
+        state = fct_lump(state, 16), # this will lump the data into 16 most common states 
+        name = "n_po") %>% 
+  filter(state != "Other") %>% 
+  mutate(state = fct_reorder(state, -n_po, .fun = sum)) %>%  # .fun = sum reorders by the sum (total area under the curve) of the n_po for lumped states 
+  arrange(desc(year)) %>% 
+  ggplot(aes(year, n_po, fill = state)) +
+  geom_area() +
+  labs(x = "Year",
+       y = "No. post offices active each year") +
+  facet_wrap(~state) +
+  theme(legend.position = "none") +
+  labs(title = "States by most post offices active each year")
+
+po_years %>% 
+  count(year, 
+        state = fct_lump(state, -16), # this will lump the data into 16 most common states 
+        name = "n_po") %>% 
+  filter(state != "Other") %>% 
+  mutate(state = fct_reorder(state, -n_po, .fun = sum)) %>%  # .fun = sum reorders by the sum (total area under the curve) of the n_po for lumped states 
+  arrange(desc(year)) %>% 
+  ggplot(aes(year, n_po, fill = state)) +
+  geom_area() +
+  labs(x = "Year",
+       y = "No. post offices active each year") +
+  facet_wrap(~state) +
+  theme(legend.position = "none") +
+  labs(title = "States by least post offices active each year")
+  
+# It would be interesting to link this data to the geographic area and population of these states 
+```
+
+# Where do we see the most closed po? 
+```{r}
+# count the closures by state 
+
+po %>% 
+  filter(discontinued <= 2000) %>% 
+  count(state = fct_lump(state, 16), 
+        decade = 10 * (discontinued %/% 10), 
+        name = "n_closures"
+        ) %>% 
+  mutate(state = fct_reorder(state, -n_closures, sum)) %>% 
+  filter(state != "Other") %>% 
+  ggplot(aes(decade, n_closures, fill = state)) +
+  geom_area() +
+  facet_wrap(~state) + 
+  theme(legend.position = "none")
+``` 
+
+
+Maps 
+```{r}
+
+# number of post offices by state 
+# Using map data
+# R has inbuilt state.abb and state.name which can be joined to map data to bring in the names of the abbreviated names of the state 
+
+state_map <- map_data("state") %>% 
+  as_tibble() %>% 
+  mutate(state = state.abb[match(region, str_to_lower(state.name))]) %>% 
+  replace_na(list(state = "DC"))
+# state_map %>% filter(is.na(state)) %>% distinct(region)
+
+
+#Pulling in the population data 
+
+library(historydata)
+
+state_pop <- us_state_populations %>% 
+  mutate(state = state.abb[match(state,state.name)]) %>% 
+  replace_na(list(state = "DC")) 
+
+po_years %>% 
+  filter(year == 2000) %>% 
+  count(state, sort=T) %>% 
+  inner_join(state_pop %>% 
+  filter(year == "2000"), by = "state") %>% 
+  inner_join(state_map, by = "state") %>%
+  mutate(po_density = n / (population/1e6)) %>% 
+  ggplot(aes(long,lat,group =group, fill = po_density)) +
+  geom_polygon() +
+ # scale_fill_gradient2(low = "cyan", high = "navyblue", midpoint = 700) +
+  theme_map() +
+  labs(title = "US Post Offices per million (2001)")
+```
+
+Animated maps 
+```{r}
+
+po_years %>% 
+  count(year, state, name = "n_po") %>%
+  inner_join(state_pop, by = c("year","state")) %>% 
+  inner_join(state_map, by = "state") %>%
+  filter(year %in% c(1700, 1830, 1950, 2000)) %>% 
+  mutate(po_density = n_po / (population/1e6)) %>%
+  ggplot(aes(long,lat,group =group, fill = po_density)) +
+  geom_polygon() +
+  facet_wrap(~year) +
+ # scale_fill_gradient2(low = "cyan", high = "navyblue", midpoint = 700) +
+  theme_map()
+  
+```
+
+```{r}
+library(gganimate)
+library(gifski)
+library(png)
+
+by_state_yr <- po_years %>% 
+  count(year, state, name = "n_po") %>%
+  left_join(state_pop, by = c("year","state")) %>% 
+  mutate(po_density = n_po / (population/1e6))
+
+by_state_yr %>% 
+  filter(year %% 10 == 0) %>%
+  inner_join(state_map, by = "state") %>%
+  ggplot(aes(long, lat, group = group, fill = po_density)) +
+  geom_polygon() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "pink") +
+  transition_manual(year) +
+  theme_map() +
+  labs(fill = "Post offices", 
+       title = "{current_frame}")
+
+#anim_save("plots/po_per_million_over_decades.gif")  
+
+```
+
+```{r}
+#
+po_years %>% 
+  filter(year == "2000",
+         !state %in% c("HI","AK")) %>%
+  ggplot(aes(longitude, latitude)) +
+  geom_point(size = 0.2) +
+  theme_map() +
+  borders("state") +
+  labs(title = "post offices in year 2000")
+ 
+#
+  po_years %>% 
+  filter(year >= 1800,
+         year %% 5 == 0,
+         !state %in% c("HI","AK")) %>%
+  ggplot(aes(longitude, latitude)) +
+  geom_point(size = 0.1, color = "gold3", alpha = 0.2) +
+  theme_map() +
+  theme(plot.background = element_rect(fill = "gray38"), 
+    title = element_text(hjust = 0.5, face = "bold", size = 12, color = "white"))+
+  borders("state", color = "white") +
+  transition_manual(year) +
+  labs(title = "Civilization Through US Post Offices: {current_frame}",
+       subtitle = "Number of active post offices between 1800 to 2000",
+       caption = "@namitatrix for #TidyTuesday")
+
+anim_save("po_map_over_time.gif")
+
+# 
+po_years %>% 
+  filter(between(year, 1750,2000)) %>%
+  count(year, name = "total_npo") %>% 
+  ggplot(aes(year, total_npo)) +
+  geom_line() +
+  labs(x = "Total number of active post offices", y = "Year", 
+       title = "No. of post offices over years") + 
+  theme(title = element_text(hjust = 0.5, face = "bold", size = 12))
+
+
+#
+po_years %>% 
+  #mutate(decade = 10 * (year %/% 10)) %>% 
+  count(year,
+        state = fct_lump(state, 10), 
+        name = "n_po") %>% 
+  filter(state != "Other") %>% 
+  inner_join(state_pop, by = c("year","state")) %>% 
+  mutate(po_density = n_po / (population/1e6)) %>% 
+  mutate(state = fct_reorder(state, -po_density)) %>% 
+  filter(year %% 5 == 0) %>% 
+  ggplot(aes(state, po_density)) +
+  geom_col() +
+  theme(legend.position = "none",
+        title = element_text(face = "bold", hjust = 0.5, size = 12)) +
+  transition_manual(year) +
+  labs(x = "",
+       y = "No. of post offices per 1e6 residents",
+       title = "{current_frame}")
+```
+

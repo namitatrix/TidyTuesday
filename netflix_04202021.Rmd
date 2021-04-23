@@ -1,0 +1,56 @@
+---
+title: "netflix_04202021"
+author: "Namita Trikannad"
+date: "4/22/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# set default knitr chunks
+knitr::opts_chunk$set(
+  tidy.opts=list(width.cutoff=60),tidy=TRUE,
+  echo = FALSE,  # don't print the code chunk
+  results = 'hide',
+  warning = FALSE,  # don't print warnings
+  message = FALSE,  # don't print messages
+  fig.width = 8,  # set default width of figures
+  fig.height = 6,  # set default height of figures
+  fig.align = "center",  # always align figure in center
+  fig.pos = "H",  # always plot figure at the exact location of the code chunk
+  cache = F)  # don't cache results  #CHANGE THIS TO "FALSE" AFTER YOU'RE DONE !!
+
+#Remove this 
+setwd("GitHub/TidyTuesday")
+```
+
+
+```{r}
+library(tidyverse)
+library(tidytuesdayR)
+theme_set(theme_minimal())
+library(tidytext)
+library(maps)
+library(fuzzyjoin)
+library(ggthemes)
+library(ggpubr)
+library(scales)
+theme_set(theme_minimal())
+```
+
+```{r}
+tt <- tt_load("2021-04-20")
+
+netflix_titles <- tt$netflix_titles
+View(head(netflix_titles))
+
+# which countries have the most content?
+
+netflix_titles %>% 
+  count(country, sort = T) %>% View()
+```
+1. When did Netflix enter India?
+2. What were the indian titles people watching and where were they watching them the most? 
+3. How does release date vs date added for indian movie titles
+4. Innovative genres between India and US 
+5. Timeline of Genres in indian netflix
+

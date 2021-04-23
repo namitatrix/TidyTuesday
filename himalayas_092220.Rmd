@@ -151,8 +151,10 @@ df %>%
        subtitle = "Results showing for Annapurna I")
 ```
 
+# Links to interesting tidy tuesday plots from Twitter
+https://github.com/joseph-shaw/tidytuesday/blob/master/2020-09-22_Everest/2020-09-22_Mountains.R
 
-
+https://github.com/kaustavSen/tidytuesday/blob/master/2020/week_39_himalayas.Rmd
 
 
 

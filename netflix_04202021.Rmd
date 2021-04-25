@@ -200,8 +200,8 @@ geom_text_wordcloud() +
   scale_size(range = c(4, 10), guide = FALSE) +
   scale_x_continuous(breaks = NULL) +
   scale_y_continuous(breaks = NULL) +
-   labs(x = " ", y = " ", title = "Words used to describe Indian content on Netflix over time", 
-        subtitle = "Year content was added to Netflix | Top 10 most frequent words in descriptions \n",
+   labs(x = " ", y = " ", title = "What are the most common words used to describe Indian content on Netflix?", 
+        subtitle = "Year content was added to Netflix | Top most frequent words in descriptions \n",
         caption = "Visualization: @namitatrix | Source: Tidy Tuesday") +
   facet_grid(~added_year, scales = "free") +
   theme(plot.background = element_rect(fill = "#221F1F"),
@@ -214,7 +214,7 @@ geom_text_wordcloud() +
         ))
 
 
-ggsave("netflix_042221.png")
+ggsave("plots/netflix_042221.png")
 
 ```
 

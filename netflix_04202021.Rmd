@@ -26,6 +26,7 @@ setwd("GitHub/TidyTuesday")
 
 ```{r}
 library(tidyverse)
+library(lubridate)
 library(tidytuesdayR)
 theme_set(theme_minimal())
 library(tidytext)
@@ -35,22 +36,186 @@ library(ggthemes)
 library(ggpubr)
 library(scales)
 theme_set(theme_minimal())
+library(wordcloud)
+library(ggrepel)
+library(ggwordcloud)
 ```
 
 ```{r}
 tt <- tt_load("2021-04-20")
 
 netflix_titles <- tt$netflix_titles
-View(head(netflix_titles))
+
 
 # which countries have the most content?
 
 netflix_titles %>% 
-  count(country, sort = T) %>% View()
+  count(country, sort = T) 
 ```
-1. When did Netflix enter India?
-2. What were the indian titles people watching and where were they watching them the most? 
-3. How does release date vs date added for indian movie titles
-4. Innovative genres between India and US 
-5. Timeline of Genres in indian netflix
+
+```{r}
+head(netflix_titles) 
+
+# Where most content is coming from? There are also many movies that have multiple countries associated with them 
+netflix_titles %>% 
+  filter(!is.na(country)) %>% 
+  count(country, sort = T) %>% 
+  top_n(n,n = 10)
+
+# What is the range of the years? 1925 to 2021 
+netflix_titles %>% 
+  count(release_year, sort = T)
+
+netflix_titles %>% 
+   count(type)
+
+netflix_titles %>% 
+  ggplot(aes(x = release_year, fill = type)) +
+  geom_histogram()
+ 
+
+# Is the show_id unique to the show/movie? Yes 
+netflix_titles %>% 
+  group_by(title,duration) %>%
+  count(show_id) %>% 
+  filter(n > 1)
+```
+
+Cleaning steps: 
+```{r}
+netflix_titles <- netflix_titles %>% 
+  separate(duration, c("duration", "duration_unit"), sep = " ") %>% 
+  mutate(date_added = lubridate::mdy(date_added),
+         added_year = lubridate::year(date_added),
+         release_decade = 10 * (release_year %/% 10),
+         duration = as.numeric(duration)) 
+
+netflix_titles_unlisted <- netflix_titles %>% 
+    separate_rows(listed_in, sep = ", ") 
+
+# Movies and shows listed on Netflix produced entirely or partly in India 
+netflix_india <- netflix_titles %>%
+  filter(grepl("India", country)) 
+```
+
+Questions:
+1. When was the date for Netflix India entry? 
+2. What are the most common genres in Indian Netflix titles?
+3. More TV shows or more movies? 
+4. Are there certain directors that are listed more often?
+5. How does release date vs date added for indian movie titles
+6. Innovative genres between India and US 
+7. Timeline of Genres in indian netflix
+8. Are indian movies getting shorter on Netflix?
+9. What are the longest duration genres in Indian movies?
+
+Indian or India related content on Netflix
+```{r}
+# What is the oldest Indian movie in Netflix? 
+netflix_india %>% 
+  filter(release_year ==  min(release_year)) %>% 
+  distinct(title)
+
+# When was the first Indian movie added on Netflix?
+netflix_india %>% 
+  filter(date_added ==  min(date_added)) %>% 
+  distinct(title)
+
+# What are the most common genres? 
+netflix_india %>% 
+  count(listed_in = fct_lump(listed_in, 10), sort = T) %>%
+  mutate(listed_in = fct_reorder(listed_in, n)) %>%
+  ggplot(aes(n, listed_in)) +
+  geom_col()
+
+netflix_india %>% 
+  ggplot(aes(added_year, release_year, color = type)) +
+  geom_point(alpha = 0.5, position = "jitter")
+
+
+# Duration of Indian movies over the years?
+
+netflix_india %>% 
+  filter(type == "Movie",
+         release_decade != 1950) %>% 
+  # group_by(release_decade, listed_in) %>% 
+  # summarise(median_duration = median(duration, na.rm = T)) 
+  ggplot(aes(x = as.factor(release_decade), y = duration)) +
+  geom_boxplot() +
+  labs(x = "Release Decade", y = "Duration(mins)", 
+       title = "Indian movies on Netflix: duration over decades") +
+  theme(title = element_text(hjust = 0.5, face = "bold"))
+
+
+# Most frequently occuring actors by year 
+netflix_india %>% 
+  separate_rows(cast, sep = ", ") %>% 
+  filter(!is.na(cast)) %>% 
+  count(type, added_year, cast)  %>%
+  group_by(type, added_year) %>%
+  slice(which.max(n))
+
+# Most frequently occuring directors by decade
+netflix_india %>% 
+  separate_rows(director, sep = ", ") %>% 
+  filter(!is.na(director)) %>% 
+  count(type, release_decade, director)  %>%
+  group_by(type, release_decade) %>%
+  slice(which.max(n))
+
+# Difference between time it takes for indian movies to be listed 
+netflix_india %>% 
+  separate_rows(director, sep = ", ") %>%
+  filter(director %in% c("Lekh Tandon", "Hrishikesh Mukherjee", "Umesh Mehra", "Ashutosh Gowariker", "Dibakar Banerjee", "Anurag Kashyap")) %>%
+  mutate(diff_date = added_year - release_year) %>% 
+  ggplot(aes(y = fct_reorder(title, diff_date))) +
+  geom_segment(aes(x = added_year, xend = release_year, yend = title)) +
+  labs( x = " ", y = " ", 
+        title = "Time Between Release Date & Date Added To Netflix",
+        subtitle = "Movies selected are directed by the most frequently listed directors of the decade")
+```
+
+Main plot: 
+```{r}
+# Most commonly used words to describe Indian content listed on Netflix over the years they were added/release decade 
+
+ind_words <- netflix_india %>% 
+  unnest_tokens(word, description, drop = F) %>% 
+  mutate(word = ifelse(grepl("indian", word), "india", 
+                                    ifelse(grepl("brother's", word), "brother", word))) %>% 
+    filter(word != "sets") %>%
+  count(added_year, word, sort = T) %>%
+  anti_join(stop_words, by = "word") %>% 
+  filter(word != "india") #removing some words manually that are particularly descriptors
+
+ind_words %>%  
+ filter(n > 1) %>%
+  #filter(release_decade != 1950) %>%
+  group_by(added_year) %>% 
+  top_n(n, n = 10) %>% 
+  ggplot (aes(label = word, size = n, color = n)) +
+geom_text_wordcloud() +
+  facet_grid(~added_year) +
+  scale_color_gradient(low = "red", high = "red") +
+  scale_size(range = c(4, 10), guide = FALSE) +
+  scale_x_continuous(breaks = NULL) +
+  scale_y_continuous(breaks = NULL) +
+   labs(x = " ", y = " ", title = "Words used to describe Indian content on Netflix over time", 
+        subtitle = "Year content was added to Netflix | Top 10 most frequent words in descriptions \n",
+        caption = "Visualization: @namitatrix | Source: Tidy Tuesday") +
+  facet_grid(~added_year, scales = "free") +
+  theme(plot.background = element_rect(fill = "#221F1F"),
+        panel.background = element_rect(fill = "#221F1F"),
+        plot.title = element_text(hjust = 0.5, size = 20, color = "#F5F5F1"),
+        plot.subtitle = element_text(hjust = 0.5, size = 12, color = "#F5F5F1"),
+        plot.caption = element_text(size = 10,  color = "#F5F5F1"),
+        strip.text.x = element_text(
+        size = 12, color = "#F5F5F1", face = "bold"
+        ))
+
+
+ggsave("netflix_042221.png")
+
+```
+
 

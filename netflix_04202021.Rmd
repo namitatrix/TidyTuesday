@@ -218,4 +218,6 @@ ggsave("plots/netflix_042221.png")
 
 ```
 
+Interesting plots:
+1. https://github.com/gkaramanis/tidytuesday/blob/master/2021/2021-week16/netflix-titles.R
 
